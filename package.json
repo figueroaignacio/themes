@@ -1,6 +1,7 @@
 {
   "name": "i7a-themes",
   "version": "1.0.0",
+  "description": "Universal theme provider for React apps (Next.js & Vite)",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -10,18 +11,43 @@
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts --clean",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
-    "prepublishOnly": "npm run build"
+    "prepublish": "npm run build",
+    "publish:patch": "npm version patch && npm publish --access public",
+    "publish:minor": "npm version minor && npm publish --access public",
+    "publish:major": "npm version major && npm publish --access public"
   },
+  "keywords": [
+    "react",
+    "nextjs",
+    "vite",
+    "theme",
+    "dark-mode",
+    "light-mode",
+    "theme-provider"
+  ],
+  "author": "Tu Nombre",
+  "license": "MIT",
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
-    "tsup": "^8.5.0",
-    "typescript": "^5.9.3",
+    "@eslint/js": "^9.38.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "eslint-plugin-react": "^7.37.5",
+    "globals": "^16.4.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tuusuario/i7a-themes"
   }
 }
