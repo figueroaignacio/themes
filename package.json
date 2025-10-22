@@ -1,6 +1,6 @@
 {
   "name": "i7a-themes",
-  "version": "1.0.3",
+  "version": "2.0.0",
   "description": "Universal theme provider for React apps (Next.js & Vite)",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
