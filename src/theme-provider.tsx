@@ -1,174 +1,204 @@
-"use client";
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
-
-export type Theme = "light" | "dark" | "system";
-export type ResolvedTheme = "light" | "dark";
-
-export interface ThemeProviderProps {
-  children: React.ReactNode;
-  defaultTheme?: Theme;
-  storageKey?: string;
-  attribute?: "class" | "data-theme";
-  disableTransitionOnChange?: boolean;
-  forcedTheme?: Theme;
-  enableCookieStorage?: boolean;
-  cookieName?: string;
-}
+type Theme = 'light' | 'dark' | 'system';
 
 interface ThemeContextType {
   theme: Theme;
-  setTheme: (theme: Theme) => void;
-  resolvedTheme: ResolvedTheme;
-  systemTheme: ResolvedTheme | undefined;
+  resolvedTheme: 'light' | 'dark';
+  setTheme: (theme: Theme, clickEvent?: React.MouseEvent) => void;
+  themes: Theme[];
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-const MEDIA_QUERY = "(prefers-color-scheme: dark)";
+const STORAGE_KEY = 'theme-preference';
 
-const getSystemTheme = (): ResolvedTheme => {
-  if (typeof window === "undefined") return "dark";
-  return window.matchMedia(MEDIA_QUERY).matches ? "dark" : "light";
+interface ViewTransition {
+  finished: Promise<void>;
+  ready: Promise<void>;
+  updateCallbackDone: Promise<void>;
+  skipTransition: () => void;
+}
+
+type DocumentWithTransition = Document & {
+  startViewTransition?: (callback: () => void | Promise<void>) => ViewTransition;
 };
 
-const getStoredTheme = (key: string, defaultTheme: Theme): Theme => {
-  if (typeof window === "undefined") return defaultTheme;
-  try {
-    const stored = localStorage.getItem(key) as Theme;
-    if (stored === "light" || stored === "dark" || stored === "system")
-      return stored;
-  } catch {}
-  return defaultTheme;
-};
-
-const setCookie = (name: string, value: string): void => {
-  if (typeof document === "undefined") return;
-  document.cookie = `${name}=${value};path=/;max-age=31536000;SameSite=Lax`;
-};
-
-const applyTheme = (
-  theme: ResolvedTheme,
-  attribute: "class" | "data-theme",
-  disableTransition: boolean
-): void => {
-  if (typeof document === "undefined") return;
-  const html = document.documentElement;
-
-  if (disableTransition) {
-    const css = document.createElement("style");
-    css.textContent =
-      "*{-webkit-transition:none!important;-moz-transition:none!important;-o-transition:none!important;-ms-transition:none!important;transition:none!important}";
-    document.head.appendChild(css);
-    void window.getComputedStyle(document.body);
-    setTimeout(() => document.head.removeChild(css), 1);
-  }
-
-  if (attribute === "class") {
-    html.classList.remove("light", "dark");
-    html.classList.add(theme);
-  } else {
-    html.setAttribute("data-theme", theme);
-  }
-};
-
-export const ThemeProvider: React.FC<ThemeProviderProps> = ({
+export function ThemeProvider({
   children,
-  defaultTheme = "dark",
-  storageKey = "theme",
-  attribute = "class",
-  disableTransitionOnChange = true,
-  forcedTheme,
-  enableCookieStorage = false,
-  cookieName = "theme",
-}) => {
-  const [theme, setThemeState] = useState<Theme>(
-    () => forcedTheme || getStoredTheme(storageKey, defaultTheme)
-  );
-  const [systemTheme, setSystemTheme] = useState<ResolvedTheme | undefined>(
-    () => getSystemTheme()
-  );
-  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => {
-    const current = forcedTheme || getStoredTheme(storageKey, defaultTheme);
-    return current === "system" ? getSystemTheme() : current;
+  defaultTheme = 'system',
+  storageKey = STORAGE_KEY,
+  attribute = 'class',
+  enableSystem = true,
+  disableTransitionOnChange = false,
+  enableViewTransitions = true,
+}: {
+  children: React.ReactNode;
+  defaultTheme?: Theme;
+  storageKey?: string;
+  attribute?: string;
+  enableSystem?: boolean;
+  disableTransitionOnChange?: boolean;
+  enableViewTransitions?: boolean;
+}) {
+  const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem(storageKey) as Theme) || defaultTheme;
+    }
+    return defaultTheme;
   });
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mediaQuery = window.matchMedia(MEDIA_QUERY);
-    const handleChange = (e: MediaQueryListEvent) => {
-      const newSystemTheme = e.matches ? "dark" : "light";
-      setSystemTheme(newSystemTheme);
-      if (theme === "system") {
-        setResolvedTheme(newSystemTheme);
-        applyTheme(newSystemTheme, attribute, disableTransitionOnChange);
-        if (enableCookieStorage) setCookie(cookieName, newSystemTheme);
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
+  const [mounted, setMounted] = useState(false);
+
+  const getSystemTheme = (): 'light' | 'dark' => {
+    if (typeof window === 'undefined') return 'light';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  };
+
+  const resolveTheme = (currentTheme: Theme): 'light' | 'dark' => {
+    if (currentTheme === 'system') {
+      return getSystemTheme();
+    }
+    return currentTheme;
+  };
+
+  const applyTheme = (newTheme: 'light' | 'dark', clickEvent?: React.MouseEvent) => {
+    const root = document.documentElement;
+    const doc = document as DocumentWithTransition;
+
+    const updateTheme = () => {
+      root.classList.remove('light', 'dark');
+
+      if (attribute === 'class') {
+        root.classList.add(newTheme);
+      } else {
+        root.setAttribute(attribute, newTheme);
       }
+
+      root.style.colorScheme = newTheme;
     };
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
-  }, [
-    theme,
-    attribute,
-    disableTransitionOnChange,
-    enableCookieStorage,
-    cookieName,
-  ]);
+
+    if (!enableViewTransitions || !doc.startViewTransition) {
+      if (disableTransitionOnChange) {
+        const css = document.createElement('style');
+        css.type = 'text/css';
+        css.appendChild(
+          document.createTextNode(
+            '*{-webkit-transition:none!important;-moz-transition:none!important;-o-transition:none!important;-ms-transition:none!important;transition:none!important}',
+          ),
+        );
+        document.head.appendChild(css);
+        (() => window.getComputedStyle(root).opacity)();
+        setTimeout(() => {
+          document.head.removeChild(css);
+        }, 1);
+      }
+      updateTheme();
+      return;
+    }
+
+    if (clickEvent) {
+      const x = clickEvent.clientX;
+      const y = clickEvent.clientY;
+      const endRadius = Math.hypot(
+        Math.max(x, window.innerWidth - x),
+        Math.max(y, window.innerHeight - y),
+      );
+
+      const transition = doc.startViewTransition(() => {
+        updateTheme();
+      });
+
+      transition.ready.then(() => {
+        const clipPath = [
+          `circle(0px at ${x}px ${y}px)`,
+          `circle(${endRadius}px at ${x}px ${y}px)`,
+        ];
+
+        document.documentElement.animate(
+          {
+            clipPath: clipPath,
+          },
+          {
+            duration: 500,
+            easing: 'ease-in-out',
+            pseudoElement: '::view-transition-new(root)',
+          },
+        );
+      });
+    } else {
+      doc.startViewTransition(() => {
+        updateTheme();
+      });
+    }
+  };
 
   useEffect(() => {
-    const current = forcedTheme || theme;
-    const resolved =
-      current === "system" ? systemTheme || getSystemTheme() : current;
+    setMounted(true);
+    const resolved = resolveTheme(theme);
     setResolvedTheme(resolved);
-    applyTheme(resolved, attribute, false);
-    if (enableCookieStorage) setCookie(cookieName, resolved);
+    applyTheme(resolved);
   }, []);
 
-  const setTheme = useCallback(
-    (newTheme: Theme) => {
-      if (forcedTheme) return;
-      setThemeState(newTheme);
-      const resolved =
-        newTheme === "system" ? systemTheme || getSystemTheme() : newTheme;
-      setResolvedTheme(resolved);
-      applyTheme(resolved, attribute, disableTransitionOnChange);
-      try {
-        localStorage.setItem(storageKey, newTheme);
-      } catch {}
-      if (enableCookieStorage) setCookie(cookieName, resolved);
-    },
-    [
-      forcedTheme,
-      systemTheme,
-      storageKey,
-      attribute,
-      disableTransitionOnChange,
-      enableCookieStorage,
-      cookieName,
-    ]
-  );
+  useEffect(() => {
+    if (!enableSystem || !mounted) return;
 
-  return (
-    <ThemeContext.Provider
-      value={{
-        theme: forcedTheme || theme,
-        setTheme,
-        resolvedTheme,
-        systemTheme,
-      }}>
-      {children}
-    </ThemeContext.Provider>
-  );
-};
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
-export const useTheme = (): ThemeContextType => {
+    const handleChange = () => {
+      if (theme === 'system') {
+        const newResolved = getSystemTheme();
+        setResolvedTheme(newResolved);
+        applyTheme(newResolved);
+      }
+    };
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleChange);
+    } else {
+      // @ts-ignore
+      mediaQuery.addListener(handleChange);
+    }
+
+    return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener('change', handleChange);
+      } else {
+        // @ts-ignore
+        mediaQuery.removeListener(handleChange);
+      }
+    };
+  }, [theme, enableSystem, mounted]);
+
+  const setTheme = (newTheme: Theme, clickEvent?: React.MouseEvent) => {
+    setThemeState(newTheme);
+
+    try {
+      localStorage.setItem(storageKey, newTheme);
+    } catch (e) {}
+
+    const resolved = resolveTheme(newTheme);
+    setResolvedTheme(resolved);
+    applyTheme(resolved, clickEvent);
+  };
+
+  const themes: Theme[] = enableSystem ? ['light', 'dark', 'system'] : ['light', 'dark'];
+
+  const value = {
+    theme,
+    resolvedTheme,
+    setTheme,
+    themes,
+  };
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
+
+export function useTheme() {
   const context = useContext(ThemeContext);
-  if (!context) throw new Error("useTheme must be used within ThemeProvider");
+  if (context === undefined) {
+    throw new Error('useTheme debe usarse dentro de ThemeProvider');
+  }
   return context;
-};
+}
