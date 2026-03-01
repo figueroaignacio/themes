@@ -1,13 +1,15 @@
 # i7a-themes
 
-Lightweight and flexible theme management library for React projects. It allows you to easily switch between multiple themes (light, dark, or custom) and customize your UI experience.
+Lightweight and flexible theme management library for React projects. Perfect for **Next.js (App Router)** and **Vite**. It allows you to easily switch between multiple themes (light, dark, or custom) and customize your UI experience without FOUC (Flash of Unstyled Content).
 
 ## Features
 
-- ✅ Support for multiple themes (`light`, `dark`, `system`, or custom`).
-- ✅ Easy integration with React and Next.js projects.
+- ✅ **No FOUC**: Built-in script injection to prevent theme flashes before hydration.
+- ✅ Support for multiple themes (`light`, `dark`, `system`, or custom).
+- ✅ Seamless integration with Next.js App Router (`"use client"`) and Vite.
 - ✅ Automatic system theme detection (`prefers-color-scheme`).
 - ✅ Persistent theme storage using `localStorage`.
+- ✅ Opt-in View Transitions API support for smooth theme switching animations.
 - ✅ Fully typed with TypeScript.
 
 ## Installation
@@ -16,25 +18,57 @@ Lightweight and flexible theme management library for React projects. It allows 
 npm install i7a-themes
 # or
 yarn add i7a-themes
+# or
+pnpm add i7a-themes
 ```
 
 ## Usage
 
-### Setup Provider
+### Next.js App Router Usage (Recommended)
 
-Wrap your app with the `ThemeProvider`:
+In Next.js App Router, you should add `suppressHydrationWarning` to your `<html>` tag. Because `i7a-themes` injects a script to apply the theme class immediately (to prevent FOUC), React will complain if the server-rendered HTML doesn't match the client-modified HTML. The provider itself also uses `"use client"`.
 
 ```tsx
+// app/layout.tsx
 import { ThemeProvider } from "i7a-themes";
-import App from "./App";
+import "./globals.css";
 
-export default function Root() {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <ThemeProvider>
-      <App />
-    </ThemeProvider>
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          {children}
+        </ThemeProvider>
+      </body>
+    </html>
   );
 }
+```
+
+### Vite / Generic React Usage
+
+Wrap your main component with the `ThemeProvider`:
+
+```tsx
+// main.tsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { ThemeProvider } from "i7a-themes";
+import App from "./App";
+import "./index.css";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <App />
+    </ThemeProvider>
+  </React.StrictMode>,
+);
 ```
 
 ### CSS Custom Properties
@@ -82,8 +116,8 @@ body {
 }
 
 body {
-  background-color: var(--background)
-  color: var(--foreground)
+  background-color: var(--background);
+  color: var(--foreground);
 }
 ```
 
@@ -92,6 +126,8 @@ body {
 Use the `useTheme` hook to access or update the current theme:
 
 ```tsx
+"use client"; // If in Next.js
+
 import { useTheme } from "i7a-themes";
 
 export default function ThemeSwitcher() {
@@ -103,7 +139,7 @@ export default function ThemeSwitcher() {
       <p>Resolved theme: {resolvedTheme}</p>
 
       {themes.map((t) => (
-        <button key={t} onClick={() => setTheme(t)}>
+        <button key={t} onClick={(e) => setTheme(t, e)}>
           {t}
         </button>
       ))}
@@ -111,6 +147,8 @@ export default function ThemeSwitcher() {
   );
 }
 ```
+
+**Note:** Passing the event `e` to `setTheme(t, e)` will trigger the experimental View Transitions API animation if supported by the browser.
 
 ## Available Themes
 

@@ -1,17 +1,26 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+"use client";
 
-type Theme = 'light' | 'dark' | 'system';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+type Theme = "light" | "dark" | "system";
 
 interface ThemeContextType {
   theme: Theme;
-  resolvedTheme: 'light' | 'dark';
+  resolvedTheme: "light" | "dark";
   setTheme: (theme: Theme, clickEvent?: React.MouseEvent) => void;
   themes: Theme[];
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'theme-preference';
+const STORAGE_KEY = "theme-preference";
 
 interface ViewTransition {
   finished: Promise<void>;
@@ -21,18 +30,12 @@ interface ViewTransition {
 }
 
 type DocumentWithTransition = Document & {
-  startViewTransition?: (callback: () => void | Promise<void>) => ViewTransition;
+  startViewTransition?: (
+    callback: () => void | Promise<void>,
+  ) => ViewTransition;
 };
 
-export function ThemeProvider({
-  children,
-  defaultTheme = 'system',
-  storageKey = STORAGE_KEY,
-  attribute = 'class',
-  enableSystem = true,
-  disableTransitionOnChange = false,
-  enableViewTransitions = true,
-}: {
+export interface ThemeProviderProps {
   children: React.ReactNode;
   defaultTheme?: Theme;
   storageKey?: string;
@@ -40,165 +43,211 @@ export function ThemeProvider({
   enableSystem?: boolean;
   disableTransitionOnChange?: boolean;
   enableViewTransitions?: boolean;
-}) {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem(storageKey) as Theme) || defaultTheme;
-    }
-    return defaultTheme;
-  });
+  nonce?: string;
+}
 
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
+export function ThemeProvider({
+  children,
+  defaultTheme = "system",
+  storageKey = STORAGE_KEY,
+  attribute = "class",
+  enableSystem = true,
+  disableTransitionOnChange = false,
+  enableViewTransitions = true,
+  nonce,
+}: ThemeProviderProps) {
+  const [theme, setThemeState] = useState<Theme>(defaultTheme);
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
   const [mounted, setMounted] = useState(false);
 
-  const getSystemTheme = (): 'light' | 'dark' => {
-    if (typeof window === 'undefined') return 'light';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  };
+  const getSystemTheme = useCallback((): "light" | "dark" => {
+    if (typeof window === "undefined") return "light";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  }, []);
 
-  const resolveTheme = (currentTheme: Theme): 'light' | 'dark' => {
-    if (currentTheme === 'system') {
-      return getSystemTheme();
-    }
-    return currentTheme;
-  };
+  const resolveTheme = useCallback(
+    (currentTheme: Theme): "light" | "dark" => {
+      if (currentTheme === "system") {
+        return getSystemTheme();
+      }
+      return currentTheme;
+    },
+    [getSystemTheme],
+  );
 
-  const applyTheme = (newTheme: 'light' | 'dark', clickEvent?: React.MouseEvent) => {
-    const root = document.documentElement;
-    const doc = document as DocumentWithTransition;
+  const applyTheme = useCallback(
+    (newTheme: "light" | "dark", clickEvent?: React.MouseEvent) => {
+      if (typeof document === "undefined") return;
 
-    const updateTheme = () => {
-      root.classList.remove('light', 'dark');
+      const root = document.documentElement;
+      const doc = document as DocumentWithTransition;
 
-      if (attribute === 'class') {
-        root.classList.add(newTheme);
+      const updateTheme = () => {
+        root.classList.remove("light", "dark");
+
+        if (attribute === "class") {
+          root.classList.add(newTheme);
+        } else {
+          root.setAttribute(attribute, newTheme);
+        }
+
+        root.style.colorScheme = newTheme;
+      };
+
+      if (!enableViewTransitions || !doc.startViewTransition) {
+        if (disableTransitionOnChange) {
+          const css = document.createElement("style");
+          css.type = "text/css";
+          css.appendChild(
+            document.createTextNode(
+              "*{-webkit-transition:none!important;-moz-transition:none!important;-o-transition:none!important;-ms-transition:none!important;transition:none!important}",
+            ),
+          );
+          document.head.appendChild(css);
+          (() => window.getComputedStyle(root).opacity)();
+          setTimeout(() => {
+            document.head.removeChild(css);
+          }, 1);
+        }
+        updateTheme();
+        return;
+      }
+
+      if (clickEvent) {
+        const x = clickEvent.clientX;
+        const y = clickEvent.clientY;
+        const endRadius = Math.hypot(
+          Math.max(x, window.innerWidth - x),
+          Math.max(y, window.innerHeight - y),
+        );
+
+        const transition = doc.startViewTransition(() => {
+          updateTheme();
+        });
+
+        transition.ready.then(() => {
+          const clipPath = [
+            `circle(0px at ${x}px ${y}px)`,
+            `circle(${endRadius}px at ${x}px ${y}px)`,
+          ];
+
+          document.documentElement.animate(
+            {
+              clipPath: clipPath,
+            },
+            {
+              duration: 500,
+              easing: "ease-in-out",
+              pseudoElement: "::view-transition-new(root)",
+            },
+          );
+        });
       } else {
-        root.setAttribute(attribute, newTheme);
+        doc.startViewTransition(() => {
+          updateTheme();
+        });
       }
-
-      root.style.colorScheme = newTheme;
-    };
-
-    if (!enableViewTransitions || !doc.startViewTransition) {
-      if (disableTransitionOnChange) {
-        const css = document.createElement('style');
-        css.type = 'text/css';
-        css.appendChild(
-          document.createTextNode(
-            '*{-webkit-transition:none!important;-moz-transition:none!important;-o-transition:none!important;-ms-transition:none!important;transition:none!important}',
-          ),
-        );
-        document.head.appendChild(css);
-        (() => window.getComputedStyle(root).opacity)();
-        setTimeout(() => {
-          document.head.removeChild(css);
-        }, 1);
-      }
-      updateTheme();
-      return;
-    }
-
-    if (clickEvent) {
-      const x = clickEvent.clientX;
-      const y = clickEvent.clientY;
-      const endRadius = Math.hypot(
-        Math.max(x, window.innerWidth - x),
-        Math.max(y, window.innerHeight - y),
-      );
-
-      const transition = doc.startViewTransition(() => {
-        updateTheme();
-      });
-
-      transition.ready.then(() => {
-        const clipPath = [
-          `circle(0px at ${x}px ${y}px)`,
-          `circle(${endRadius}px at ${x}px ${y}px)`,
-        ];
-
-        document.documentElement.animate(
-          {
-            clipPath: clipPath,
-          },
-          {
-            duration: 500,
-            easing: 'ease-in-out',
-            pseudoElement: '::view-transition-new(root)',
-          },
-        );
-      });
-    } else {
-      doc.startViewTransition(() => {
-        updateTheme();
-      });
-    }
-  };
+    },
+    [attribute, disableTransitionOnChange, enableViewTransitions],
+  );
 
   useEffect(() => {
-    setMounted(true);
-    const resolved = resolveTheme(theme);
+    const savedTheme =
+      (localStorage.getItem(storageKey) as Theme) || defaultTheme;
+    setThemeState(savedTheme);
+    const resolved = resolveTheme(savedTheme);
     setResolvedTheme(resolved);
-    applyTheme(resolved);
-  }, []);
+    setMounted(true);
+  }, [defaultTheme, resolveTheme, storageKey]);
 
   useEffect(() => {
     if (!enableSystem || !mounted) return;
 
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {
-      if (theme === 'system') {
+      if (theme === "system") {
         const newResolved = getSystemTheme();
         setResolvedTheme(newResolved);
         applyTheme(newResolved);
       }
     };
 
-    if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener('change', handleChange);
-    } else {
-      // @ts-ignore
-      mediaQuery.addListener(handleChange);
-    }
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, [theme, enableSystem, mounted, getSystemTheme, applyTheme]);
 
-    return () => {
-      if (mediaQuery.removeEventListener) {
-        mediaQuery.removeEventListener('change', handleChange);
-      } else {
-        // @ts-ignore
-        mediaQuery.removeListener(handleChange);
-      }
-    };
-  }, [theme, enableSystem, mounted]);
-
-  const setTheme = (newTheme: Theme, clickEvent?: React.MouseEvent) => {
-    setThemeState(newTheme);
-
-    try {
-      localStorage.setItem(storageKey, newTheme);
-    } catch (e) {}
-
-    const resolved = resolveTheme(newTheme);
+  // Initial theme application after mount, avoiding transition effects here
+  useEffect(() => {
+    if (!mounted) return;
+    const resolved = resolveTheme(theme);
     setResolvedTheme(resolved);
-    applyTheme(resolved, clickEvent);
-  };
+    applyTheme(resolved);
+  }, [mounted, theme, resolveTheme, applyTheme]);
 
-  const themes: Theme[] = enableSystem ? ['light', 'dark', 'system'] : ['light', 'dark'];
+  const setTheme = useCallback(
+    (newTheme: Theme, clickEvent?: React.MouseEvent) => {
+      setThemeState(newTheme);
 
-  const value = {
-    theme,
-    resolvedTheme,
-    setTheme,
-    themes,
-  };
+      try {
+        localStorage.setItem(storageKey, newTheme);
+      } catch (e) {
+        // Ignore
+      }
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+      const resolved = resolveTheme(newTheme);
+      setResolvedTheme(resolved);
+      applyTheme(resolved, clickEvent);
+    },
+    [storageKey, resolveTheme, applyTheme],
+  );
+
+  const themes: Theme[] = useMemo(
+    () => (enableSystem ? ["light", "dark", "system"] : ["light", "dark"]),
+    [enableSystem],
+  );
+
+  const value = useMemo(
+    () => ({
+      theme,
+      resolvedTheme,
+      setTheme,
+      themes,
+    }),
+    [theme, resolvedTheme, setTheme, themes],
+  );
+
+  // Theme script to be injected to avoid FOUC
+  const scriptContent = `(function() {
+    try {
+      var localTheme = window.localStorage.getItem('${storageKey}');
+      var theme = localTheme ? localTheme : '${defaultTheme}';
+      if (theme === 'system') {
+        theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      var root = document.documentElement;
+      ${attribute === "class" ? "root.classList.add(theme);" : `root.setAttribute('${attribute}', theme);`}
+      root.style.colorScheme = theme;
+    } catch (e) {}
+  })();`;
+
+  return (
+    <ThemeContext.Provider value={value}>
+      <script
+        suppressHydrationWarning
+        nonce={nonce}
+        dangerouslySetInnerHTML={{ __html: scriptContent }}
+      />
+      {children}
+    </ThemeContext.Provider>
+  );
 }
 
 export function useTheme() {
   const context = useContext(ThemeContext);
   if (context === undefined) {
-    throw new Error('useTheme debe usarse dentro de ThemeProvider');
+    throw new Error("useTheme must be used within a ThemeProvider");
   }
   return context;
 }
