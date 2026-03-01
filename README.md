@@ -1,4 +1,4 @@
-# i7a-themes
+# nach-themes
 
 Lightweight and flexible theme management library for React projects. Perfect for **Next.js (App Router)** and **Vite**. It allows you to easily switch between multiple themes (light, dark, or custom) and customize your UI experience without FOUC (Flash of Unstyled Content).
 
@@ -15,11 +15,11 @@ Lightweight and flexible theme management library for React projects. Perfect fo
 ## Installation
 
 ```bash
-npm install i7a-themes
+npm install nach-themes
 # or
-yarn add i7a-themes
+yarn add nach-themes
 # or
-pnpm add i7a-themes
+pnpm add nach-themes
 ```
 
 ## Usage
