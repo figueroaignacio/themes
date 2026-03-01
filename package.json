@@ -1,6 +1,6 @@
 {
   "name": "nach-themes",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Universal theme provider for React apps (Next.js & Vite)",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
