@@ -5,9 +5,13 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
 } from "react";
+
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 type Theme = "light" | "dark" | "system";
 
@@ -78,7 +82,11 @@ export function ThemeProvider({
   );
 
   const applyTheme = useCallback(
-    (newTheme: "light" | "dark", clickEvent?: React.MouseEvent) => {
+    (
+      newTheme: "light" | "dark",
+      clickEvent?: React.MouseEvent,
+      isInitial = false,
+    ) => {
       if (typeof document === "undefined") return;
 
       const root = document.documentElement;
@@ -96,7 +104,7 @@ export function ThemeProvider({
         root.style.colorScheme = newTheme;
       };
 
-      if (!enableViewTransitions || !doc.startViewTransition) {
+      if (!enableViewTransitions || !doc.startViewTransition || isInitial) {
         if (disableTransitionOnChange) {
           const css = document.createElement("style");
           css.type = "text/css";
@@ -153,14 +161,15 @@ export function ThemeProvider({
     [attribute, disableTransitionOnChange, enableViewTransitions],
   );
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const savedTheme =
       (localStorage.getItem(storageKey) as Theme) || defaultTheme;
     setThemeState(savedTheme);
     const resolved = resolveTheme(savedTheme);
     setResolvedTheme(resolved);
+    applyTheme(resolved, undefined, true);
     setMounted(true);
-  }, [defaultTheme, resolveTheme, storageKey]);
+  }, [defaultTheme, resolveTheme, storageKey, applyTheme]);
 
   useEffect(() => {
     if (!enableSystem || !mounted) return;
@@ -177,14 +186,6 @@ export function ThemeProvider({
     mediaQuery.addEventListener("change", handleChange);
     return () => mediaQuery.removeEventListener("change", handleChange);
   }, [theme, enableSystem, mounted, getSystemTheme, applyTheme]);
-
-  // Initial theme application after mount, avoiding transition effects here
-  useEffect(() => {
-    if (!mounted) return;
-    const resolved = resolveTheme(theme);
-    setResolvedTheme(resolved);
-    applyTheme(resolved);
-  }, [mounted, theme, resolveTheme, applyTheme]);
 
   const setTheme = useCallback(
     (newTheme: Theme, clickEvent?: React.MouseEvent) => {
